@@ -1,0 +1,22 @@
+data:
+  path: data/processed/twitter_tweets_clean.csv
+  text_col: text
+  label_col: vader_sentiment_label
+
+tfidf:
+  max_features: 2000
+
+lgbm:
+  n_estimators: 124
+  learning_rate: 0.25739253044320604
+  num_leaves: 21
+  max_depth: 20
+  subsample: 0.9807188680052455
+  colsample_bytree: 0.8709298877812564
+
+train:
+  test_size: 0.2
+  random_state: 42
+
+mlflow:
+  experiment_name: Twitter_Sentiment_LGBM_TFIDF

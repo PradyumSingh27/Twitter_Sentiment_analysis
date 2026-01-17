@@ -10,6 +10,7 @@ __pycache__/
 
 # MLflow
 mlruns/
+mlflow.db
 
 # DVC cache
 .dvc/cache/
@@ -17,9 +18,13 @@ mlruns/
 # VS Code
 .vscode/
 
+# Model(joblib)
+models/*.joblib
+
 # OS
 Thumbs.db
 .DS_Store
 
 #dataset
-/twitter_tweets_clean.csv
+data/raw/*.csv
+data/processed/*.csv
