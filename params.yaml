@@ -5,6 +5,8 @@ data:
 
 tfidf:
   max_features: 2000
+  ngram_min: 1
+  ngram_max: 1  
 
 lgbm:
   n_estimators: 124
@@ -20,3 +22,4 @@ train:
 
 mlflow:
   experiment_name: Twitter_Sentiment_LGBM_TFIDF
+  run_name: LGBM_TFIDF_UNIGRAM_WITH_PREPROCESS
