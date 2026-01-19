@@ -19,7 +19,7 @@ mlflow.db
 .vscode/
 
 # Model(joblib)
-models/*.joblib
+models/
 
 # OS
 Thumbs.db
