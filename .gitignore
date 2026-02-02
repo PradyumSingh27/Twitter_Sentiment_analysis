@@ -5,8 +5,6 @@
 __pycache__/
 *.pyc
 
-# Jupyter
-.ipynb_checkpoints/
 
 # MLflow
 mlruns/
@@ -30,3 +28,6 @@ data/raw/*.csv
 data/processed/*.csv
 
 __pycache__/
+
+# Jupyter
+.ipynb_checkpoints/
