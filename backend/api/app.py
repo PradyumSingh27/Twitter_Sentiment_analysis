@@ -1,111 +1,103 @@
-# app.py
 import io
-import re
 import os
+import re
 import joblib
 import pandas as pd
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
 
-from typing import List
+from pathlib import Path
+from functools import lru_cache
+from typing import List, Dict
+
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse, StreamingResponse
+
 from wordcloud import WordCloud
 
 import nltk
 from nltk.corpus import stopwords, wordnet
 from nltk.stem import WordNetLemmatizer
-
 import emoji
-from functools import lru_cache
-
 import mlflow
-from pathlib import Path
 
 
-app = FastAPI(title="Twitter Sentiment FastAPI")
+# =========================================================
+# ✅ App Init
+# =========================================================
+app = FastAPI(title="Sentiment Analyzer API (YouTube + Reddit)")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # ✅ for local development only
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# --------------------------------------------------
-# ✅ Enable/Disable MLflow using Environment Variable
-# --------------------------------------------------
-# default: false (for deployment safety)
+# =========================================================
+# ✅ MLflow Toggle
+# =========================================================
 ENABLE_MLFLOW = os.getenv("ENABLE_MLFLOW", "false").lower() == "true"
 
-
-# --------------------------------------------------
-# ✅ Model path (inside backend/models)
-# --------------------------------------------------
+# =========================================================
+# ✅ Paths
+# =========================================================
 BASE_DIR = Path(__file__).resolve().parent.parent  # backend/
 MODEL_PATH = BASE_DIR / "models" / "final_data_pipeline.joblib"
 
 
-# -----------------------------
-# ✅ Global objects (fast)
-# -----------------------------
-STOP_WORDS = set(stopwords.words("english")) - {"not", "but", "however", "no", "yet"}
+# =========================================================
+# ✅ Globals
+# =========================================================
+try:
+    STOP_WORDS = set(stopwords.words("english")) - {"not", "but", "however", "no", "yet"}
+except:
+    STOP_WORDS = set()
+
 LEMMATIZER = WordNetLemmatizer()
 
-chat_word = {
-    "AFAIK": "As Far As I Know",
-    "AFK": "Away From Keyboard",
-    "ASAP": "As Soon As Possible",
-    "ATM": "At The Moment",
+CHAT_WORDS = {
+    "LOL": "Laughing Out Loud",
+    "LMAO": "Laugh My Ass Off",
     "BRB": "Be Right Back",
+    "AFK": "Away From Keyboard",
     "BTW": "By The Way",
-    "FYI": "For Your Information",
-    "GG": "Good Game",
-    "GN": "Good Night",
     "IDK": "I Don’t Know",
     "IMO": "In My Opinion",
     "IMHO": "In My Honest Opinion",
-    "IRL": "In Real Life",
-    "LMAO": "Laugh My Ass Off",
-    "LOL": "Laughing Out Loud",
-    "ROFL": "Rolling On The Floor Laughing",
-    "THX": "Thank You",
-    "TTYL": "Talk To You Later",
-    "U": "You",
-    "WB": "Welcome Back",
-    "WTF": "What The F...",
+    "FYI": "For Your Information",
 }
 
 
 def chat_conversion(text: str) -> str:
-    new_text = []
+    out = []
     for w in str(text).split():
-        if w.upper() in chat_word:
-            new_text.append(chat_word[w.upper()])
-        else:
-            new_text.append(w)
-    return " ".join(new_text)
+        out.append(CHAT_WORDS.get(w.upper(), w))
+    return " ".join(out)
 
 
 def get_wordnet_pos(word: str):
     tag = nltk.pos_tag([word])[0][1][0].upper()
-    tag_dict = {
-        "J": wordnet.ADJ,
-        "N": wordnet.NOUN,
-        "V": wordnet.VERB,
-        "R": wordnet.ADV,
-    }
+    tag_dict = {"J": wordnet.ADJ, "N": wordnet.NOUN, "V": wordnet.VERB, "R": wordnet.ADV}
     return tag_dict.get(tag, wordnet.NOUN)
 
 
 @lru_cache(maxsize=50000)
 def preprocess_comment(text: str) -> str:
     """
-    ✅ Preprocessing logic optimized for API
+    ✅ Production optimized preprocessing
     """
     text = str(text).lower().strip()
 
-    # normalize repeated chars (coooool -> cool)
+    # normalize repeated chars
     text = " ".join([re.sub(r"(.)\1{2,}", r"\1\1", w) for w in text.split()])
 
-    # chat conversion (LOL etc)
+    # chat conversion
     text = chat_conversion(text)
 
     # remove urls
@@ -114,19 +106,16 @@ def preprocess_comment(text: str) -> str:
     # remove mentions
     text = re.sub(r"@\w+", "", text)
 
-    # hashtags symbol remove but keep words
-    text = re.sub(r"#", "", text)
+    # remove hashtag symbol only
+    text = text.replace("#", "")
 
-    # remove emojis
+    # emojis remove
     text = emoji.replace_emoji(text, replace="")
 
-    # keep only letters + spaces
+    # keep only letters+spaces
     text = re.sub(r"[^a-z\s]", " ", text)
-
-    # remove extra spaces
     text = re.sub(r"\s+", " ", text).strip()
 
-    # tokenize + stopwords + lemmatize (POS)
     words = []
     for w in text.split():
         if w in STOP_WORDS:
@@ -137,63 +126,55 @@ def preprocess_comment(text: str) -> str:
     return " ".join(words)
 
 
-# -----------------------------
-# ✅ Load Model Once
-# -----------------------------
+# =========================================================
+# ✅ Load Model
+# =========================================================
 @app.on_event("startup")
 def load_model():
     global model
 
     if not MODEL_PATH.exists():
-        raise FileNotFoundError(f"❌ Model file not found at: {MODEL_PATH}")
+        raise FileNotFoundError(f"❌ Model file not found: {MODEL_PATH}")
 
     model = joblib.load(MODEL_PATH)
-    print("✅ Model loaded from:", MODEL_PATH)
+    print("✅ Model loaded:", MODEL_PATH)
 
-    # ✅ MLflow - Enable/Disable
     if ENABLE_MLFLOW:
-        # If your mlflow.db is in project root (outside backend)
-        ROOT_DIR = BASE_DIR.parent  # project root
+        ROOT_DIR = BASE_DIR.parent
         mlflow_db_path = ROOT_DIR / "mlflow.db"
-
         mlflow.set_tracking_uri(f"sqlite:///{mlflow_db_path}")
         mlflow.set_experiment("FastAPI_Predictions")
-
-        print("✅ MLflow Enabled | Tracking URI:", mlflow_db_path)
+        print("✅ MLflow ENABLED")
     else:
-        print("⚠️ MLflow Disabled (ENABLE_MLFLOW=false)")
+        print("⚠️ MLflow DISABLED")
 
 
-# -----------------------------
-# ✅ Request Models
-# -----------------------------
+# =========================================================
+# ✅ Request Schemas
+# =========================================================
 class PredictRequest(BaseModel):
     comments: List[str]
 
 
 class ChartRequest(BaseModel):
-    sentiment_counts: dict  # {"positive": 10, "neutral": 5, "negative": 3}
+    sentiment_counts: Dict[str, int]
 
 
 class WordCloudRequest(BaseModel):
     comments: List[str]
 
 
-class TrendItem(BaseModel):
-    timestamp: str
-    sentiment: str
+class LengthChartRequest(BaseModel):
+    sentiments: List[str]
+    lengths: List[int]
 
 
-class TrendRequest(BaseModel):
-    sentiment_data: List[TrendItem]
-
-
-# -----------------------------
+# =========================================================
 # ✅ Routes
-# -----------------------------
+# =========================================================
 @app.get("/")
 def home():
-    return {"message": "Welcome to the FastAPI sentiment api"}
+    return {"message": "Sentiment Analyzer API running"}
 
 
 @app.get("/health")
@@ -201,9 +182,9 @@ def health():
     return {"status": "healthy"}
 
 
-# -----------------------------
-# ✅ Predict
-# -----------------------------
+# =========================================================
+# ✅ Prediction Endpoint
+# =========================================================
 @app.post("/predict")
 def predict(req: PredictRequest):
     if not req.comments:
@@ -211,28 +192,24 @@ def predict(req: PredictRequest):
 
     try:
         cleaned = [preprocess_comment(c) for c in req.comments]
-
-        # ✅ model is pipeline: TF-IDF + LightGBM
         preds = model.predict(cleaned).tolist()
 
-        # ✅ Optional MLflow logging
         if ENABLE_MLFLOW:
-            with mlflow.start_run(run_name="api_prediction"):
+            with mlflow.start_run(run_name="predict"):
                 mlflow.log_param("num_comments", len(req.comments))
 
-        response = [
+        return [
             {"comment": c, "cleaned": cl, "sentiment": p}
             for c, cl, p in zip(req.comments, cleaned, preds)
         ]
-        return response
 
     except Exception as e:
-        return JSONResponse({"error": f"Prediction failed: {str(e)}"}, status_code=500)
+        return JSONResponse({"error": f"Prediction failed: {e}"}, status_code=500)
 
 
-# -----------------------------
-# ✅ Generate Pie Chart
-# -----------------------------
+# =========================================================
+# ✅ Pie Chart
+# =========================================================
 @app.post("/generate_chart")
 def generate_chart(req: ChartRequest):
     try:
@@ -246,26 +223,46 @@ def generate_chart(req: ChartRequest):
         ]
 
         if sum(sizes) == 0:
-            return JSONResponse({"error": "Sentiment counts sum to zero"}, status_code=400)
+            return JSONResponse({"error": "Counts sum to zero"}, status_code=400)
 
-        plt.figure(figsize=(6, 6))
-        plt.pie(sizes, labels=[x.title() for x in labels], autopct="%1.1f%%", startangle=140)
-        plt.axis("equal")
+        fig, ax = plt.subplots(figsize=(7, 6), facecolor="#111827")
+        ax.set_facecolor("#111827")
+
+        wedges, _, _ = ax.pie(
+            sizes,
+            autopct="%1.1f%%",
+            startangle=140,
+            pctdistance=0.7,
+            textprops={"color": "white", "fontsize": 12, "fontweight": "bold"},
+        )
+
+        legend = ax.legend(
+            wedges,
+            [x.title() for x in labels],
+            loc="center left",
+            bbox_to_anchor=(1.0, 0.5),
+            frameon=False
+        )
+        for t in legend.get_texts():
+            t.set_color("white")
+
+        ax.axis("equal")
 
         img_io = io.BytesIO()
+        plt.tight_layout()
         plt.savefig(img_io, format="PNG", transparent=True)
         img_io.seek(0)
-        plt.close()
+        plt.close(fig)
 
         return StreamingResponse(img_io, media_type="image/png")
 
     except Exception as e:
-        return JSONResponse({"error": f"Chart generation failed: {str(e)}"}, status_code=500)
+        return JSONResponse({"error": f"Chart generation failed: {e}"}, status_code=500)
 
 
-# -----------------------------
+# =========================================================
 # ✅ Wordcloud
-# -----------------------------
+# =========================================================
 @app.post("/generate_wordcloud")
 def generate_wordcloud(req: WordCloudRequest):
     try:
@@ -276,8 +273,8 @@ def generate_wordcloud(req: WordCloudRequest):
         text = " ".join(cleaned)
 
         wc = WordCloud(
-            width=800,
-            height=400,
+            width=900,
+            height=450,
             background_color="black",
             stopwords=STOP_WORDS,
             collocations=False
@@ -290,65 +287,5 @@ def generate_wordcloud(req: WordCloudRequest):
         return StreamingResponse(img_io, media_type="image/png")
 
     except Exception as e:
-        return JSONResponse({"error": f"Word cloud generation failed: {str(e)}"}, status_code=500)
+        return JSONResponse({"error": f"Wordcloud generation failed: {e}"}, status_code=500)
 
-
-# -----------------------------
-# ✅ Trend Graph (Monthly %)
-# -----------------------------
-@app.post("/generate_trend_graph")
-def generate_trend_graph(req: TrendRequest):
-    try:
-        if not req.sentiment_data:
-            return JSONResponse({"error": "No sentiment data provided"}, status_code=400)
-
-        df = pd.DataFrame([x.model_dump() for x in req.sentiment_data])
-        df["timestamp"] = pd.to_datetime(df["timestamp"])
-        df.set_index("timestamp", inplace=True)
-
-        mapping = {"negative": -1, "neutral": 0, "positive": 1}
-        df["sentiment_num"] = df["sentiment"].map(mapping)
-
-        monthly_counts = df.resample("M")["sentiment_num"].value_counts().unstack(fill_value=0)
-        monthly_totals = monthly_counts.sum(axis=1)
-        monthly_percentages = (monthly_counts.T / monthly_totals).T * 100
-
-        for col in [-1, 0, 1]:
-            if col not in monthly_percentages.columns:
-                monthly_percentages[col] = 0
-
-        monthly_percentages = monthly_percentages[[-1, 0, 1]]
-
-        plt.figure(figsize=(12, 6))
-        series_labels = {-1: "Negative", 0: "Neutral", 1: "Positive"}
-
-        for val in [-1, 0, 1]:
-            plt.plot(
-                monthly_percentages.index,
-                monthly_percentages[val],
-                marker="o",
-                linestyle="-",
-                label=series_labels[val],
-            )
-
-        plt.title("Monthly Sentiment Percentage Over Time")
-        plt.xlabel("Month")
-        plt.ylabel("Percentage (%)")
-        plt.grid(True)
-        plt.xticks(rotation=45)
-
-        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
-        plt.gca().xaxis.set_major_locator(mdates.AutoDateLocator(maxticks=12))
-
-        plt.legend()
-        plt.tight_layout()
-
-        img_io = io.BytesIO()
-        plt.savefig(img_io, format="PNG")
-        img_io.seek(0)
-        plt.close()
-
-        return StreamingResponse(img_io, media_type="image/png")
-
-    except Exception as e:
-        return JSONResponse({"error": f"Trend graph generation failed: {str(e)}"}, status_code=500)

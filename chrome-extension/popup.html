@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Sentiment Analyzer</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+
+<body>
+  <header class="header">
+    <div class="title-wrap">
+      <h1 class="title">Sentiment Analyzer</h1>
+      <div class="subtitle">YouTube + Reddit (API)</div>
+    </div>
+
+    <button id="analyzeBtn" class="primary-btn">Analyze</button>
+  </header>
+
+  <div class="progress-wrap">
+    <div id="status" class="status"></div>
+    <div id="error" class="error"></div>
+    <div class="progress-bar">
+      <div id="progressFill" class="progress-fill"></div>
+    </div>
+  </div>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="overviewTab">Overview</button>
+    <button class="tab" data-tab="chartsTab">Charts</button>
+    <button class="tab" data-tab="wordcloudTab">Wordcloud</button>
+    <button class="tab" data-tab="commentsTab">Comments</button>
+  </nav>
+
+  <main class="content">
+
+    <!-- OVERVIEW -->
+    <section id="overviewTab" class="tab-panel active">
+      <h2 class="section-title">Summary</h2>
+
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-label">Total Comments</div>
+          <div id="m_total" class="metric-value">-</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Unique Users</div>
+          <div id="m_unique" class="metric-value">-</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Avg Length</div>
+          <div id="m_avg_len" class="metric-value">-</div>
+        </div>
+
+        <!-- REPLACED CARD -->
+        <div class="metric-card">
+          <div class="metric-label">Dominant Mood</div>
+          <div id="m_dominant" class="metric-value">-</div>
+        </div>
+      </div>
+
+      <div class="insights">
+        <div class="insights-title">Insights</div>
+        <ul id="insightsList" class="insights-list"></ul>
+      </div>
+    </section>
+
+    <!-- CHARTS (ONLY PIE NOW) -->
+    <section id="chartsTab" class="tab-panel">
+      <h2 class="section-title">Sentiment Distribution</h2>
+      <div id="chart-container" class="media-box small-note">Run analysis to view chart.</div>
+    </section>
+
+    <!-- WORDCLOUD (3 CLOUDS) -->
+    <section id="wordcloudTab" class="tab-panel">
+      <h2 class="section-title">All Comments</h2>
+      <div id="wc_all" class="media-box small-note">Run analysis...</div>
+
+      <h2 class="section-title">Positive Comments</h2>
+      <div id="wc_positive" class="media-box small-note">Run analysis...</div>
+
+      <h2 class="section-title">Negative Comments</h2>
+      <div id="wc_negative" class="media-box small-note">Run analysis...</div>
+    </section>
+
+    <!-- COMMENTS TAB stays same -->
+    <section id="commentsTab" class="tab-panel">
+      <div class="comments-toolbar">
+        <input id="searchInput" class="search" placeholder="Search comment..." />
+
+        <select id="sortSelect" class="select">
+          <option value="default">Sort: Default</option>
+          <option value="positive">Sort: Positive first</option>
+          <option value="negative">Sort: Negative first</option>
+          <option value="neutral">Sort: Neutral first</option>
+          <option value="likes">Sort: Most liked</option>
+          <option value="replies">Sort: Most replied</option>
+        </select>
+      </div>
+
+      <div class="filter-row">
+        <button class="chip active" data-filter="all">All</button>
+        <button class="chip" data-filter="positive">Positive</button>
+        <button class="chip" data-filter="neutral">Neutral</button>
+        <button class="chip" data-filter="negative">Negative</button>
+        <button id="exportBtn" class="ghost-btn">Export CSV</button>
+      </div>
+
+      <div id="commentsCount" class="small-note"></div>
+      <div id="commentsList" class="comments-list"></div>
+    </section>
+
+  </main>
+
+  <script src="popup.js"></script>
+</body>
+</html>

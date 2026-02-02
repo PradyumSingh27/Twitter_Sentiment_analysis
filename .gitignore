@@ -30,4 +30,5 @@ data/processed/*.csv
 __pycache__/
 
 # Jupyter
+*.ipynb
 .ipynb_checkpoints/

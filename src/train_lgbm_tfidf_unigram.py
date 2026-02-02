@@ -77,7 +77,6 @@ def main():
         joblib.dump(model, model_path)
 
         mlflow.log_artifact(model_path)
-
         
         print("Accuracy:", acc)
         print("F1:", f1)
