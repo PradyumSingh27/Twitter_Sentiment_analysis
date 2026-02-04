@@ -1,0 +1,22 @@
+schema: '2.0'
+stages:
+  train_pipeline:
+    cmd: python src/final_data_pipline.py
+    deps:
+    - path: data/processed/twitter_tweets_clean.csv
+      hash: md5
+      md5: 142f7da0f98bbba6ec6802b3297a475e
+      size: 4855815
+    - path: params.yaml
+      hash: md5
+      md5: 80a350bccd074f38342620271daeacaf
+      size: 495
+    - path: src/final_data_pipline.py
+      hash: md5
+      md5: cbc6bb55b627cc2086e7f70e3637f2fa
+      size: 5062
+    outs:
+    - path: models/final_data_pipeline.joblib
+      hash: md5
+      md5: 3636e686548cec5bc4490304b85bddb5
+      size: 1056844

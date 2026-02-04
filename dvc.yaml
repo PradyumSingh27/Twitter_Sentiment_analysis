@@ -1,0 +1,10 @@
+stages:
+
+  train_pipeline:
+    cmd: python src/final_data_pipline.py
+    deps:
+      - src/final_data_pipline.py
+      - data/processed/twitter_tweets_clean.csv
+      - params.yaml
+    outs:
+      - models/final_data_pipeline.joblib
