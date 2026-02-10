@@ -1,17 +1,17 @@
 {
   "manifest_version": 3,
-  "name": "Sentiment Analyzer (YouTube + Reddit)",
-  "version": "1.0.0",
-  "description": "Fetches YouTube comments and Reddit comments via API and sends to backend for sentiment analysis.",
+  "name": "Sentiment Analyzer",
+  "version": "1.0",
+  "description": "YouTube, Reddit and Twitter Sentiment Analyzer",
+  "action": {
+    "default_popup": "popup.html"
+  },
   "permissions": ["tabs"],
   "host_permissions": [
     "https://www.googleapis.com/*",
     "https://www.reddit.com/*",
-    "http://127.0.0.1:8000/*"
-  ],
-  "action": {
-    "default_popup": "popup.html",
-    "default_title": "Sentiment Analyzer"
-  }
+    "https://twitter154.p.rapidapi.com/*",
+    "https://twitter.com/*",
+    "https://x.com/*"
+  ]
 }
-

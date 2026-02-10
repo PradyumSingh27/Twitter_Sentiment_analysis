@@ -1,184 +1,278 @@
 document.addEventListener("DOMContentLoaded", () => {
+
+  /* ================== CONFIG ================== */
+  const YOUTUBE_API_KEY = "AIzaSyAAwUhK2KrdYXj12hfCnErPOZsiGSXtLSo";
+  const BACKEND_API_URL = "http://127.0.0.1:8000";
+
+  const RAPIDAPI_KEY = "1b0959985cmsh66fd3d2dac74ee3p10be48jsn16cb3bf73db9";
+  const RAPIDAPI_HOST = "twitter-api45.p.rapidapi.com";
+
+  const MAX_COMMENTS = 500;
+
+  /* ================== ELEMENTS ================== */
   const analyzeBtn = document.getElementById("analyzeBtn");
-  const statusDiv = document.getElementById("status");
-  const errorDiv = document.getElementById("error");
+  const statusEl = document.getElementById("status");
+  const errorEl = document.getElementById("error");
   const progressFill = document.getElementById("progressFill");
 
   const mTotal = document.getElementById("m_total");
   const mUnique = document.getElementById("m_unique");
   const mAvgLen = document.getElementById("m_avg_len");
   const mDominant = document.getElementById("m_dominant");
-
   const insightsList = document.getElementById("insightsList");
-  const chartContainer = document.getElementById("chart-container");
-  const wordcloudAll = document.getElementById("wc_all");
-  const wordcloudPos = document.getElementById("wc_positive");
-  const wordcloudNeg = document.getElementById("wc_negative");
 
-  const searchInput = document.getElementById("searchInput");
-  const sortSelect = document.getElementById("sortSelect");
+  const chartContainer = document.getElementById("chart-container");
+
+  const wcAll = document.getElementById("wc_all");
+  const wcPositive = document.getElementById("wc_positive");
+  const wcNegative = document.getElementById("wc_negative");
+
   const commentsList = document.getElementById("commentsList");
   const commentsCount = document.getElementById("commentsCount");
+  const searchInput = document.getElementById("searchInput");
+  const sortSelect = document.getElementById("sortSelect");
+  const exportBtn = document.getElementById("exportBtn");
 
   const chips = document.querySelectorAll(".chip");
 
-  const YOUTUBE_API_KEY = "AIzaSyAAwUhK2KrdYXj12hfCnErPOZsiGSXtLSo";
-  const BACKEND = "http://127.0.0.1:8000";
+  /* ================= TAB SWITCHING ================= */
+  const tabs = document.querySelectorAll(".tab");
+  const panels = document.querySelectorAll(".tab-panel");
 
-  let GLOBAL = [];
+  tabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+      // remove active from all
+      tabs.forEach(t => t.classList.remove("active"));
+      panels.forEach(p => p.classList.remove("active"));
 
-  /* ---------------- UI helpers ---------------- */
-  const setStatus = msg => statusDiv.textContent = msg || "";
-  const setError = msg => errorDiv.textContent = msg || "";
-  const setProgress = p => progressFill.style.width = `${p}%`;
-
-  function blobToImg(blob, container){
-    if(!blob || !container) return;
-    const url = URL.createObjectURL(blob);
-    const img = new Image();
-    img.onload = () => {
-      container.innerHTML = "";
-      container.appendChild(img);
-    };
-    img.src = url;
-  }
-
-  function normalize(t){ return (t||"").replace(/\s+/g," ").trim(); }
-
-  /* ---------------- Tabs ---------------- */
-  document.querySelectorAll(".tab").forEach(tab=>{
-    tab.addEventListener("click", ()=>{
-      document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
-      document.querySelectorAll(".tab-panel").forEach(p=>p.classList.remove("active"));
+      // activate clicked tab
       tab.classList.add("active");
-      document.getElementById(tab.dataset.tab).classList.add("active");
+      const targetId = tab.dataset.tab;
+      const targetPanel = document.getElementById(targetId);
+
+      if (targetPanel) {
+        targetPanel.classList.add("active");
+      }
     });
   });
 
-  /* ---------------- Comments filtering ---------------- */
-  function renderComments(arr){
-    commentsList.innerHTML = arr.slice(0,100).map((r,i)=>`
-      <div class="comment-card">
-        <b>${i+1}.</b> ${r.comment}
-        <div class="badge ${r.sentiment}">${r.sentiment}</div>
-        <div class="small-note">👍 ${r.likes} | 💬 ${r.replies}</div>
-      </div>
-    `).join("");
-    commentsCount.textContent = `Showing ${Math.min(100,arr.length)} of ${arr.length}`;
+
+  /* ================== STATE ================== */
+  let GLOBAL = [];
+
+  /* ================== HELPERS ================== */
+  const setStatus = t => statusEl.textContent = t || "";
+  const setError = t => errorEl.textContent = t || "";
+  const setProgress = p => progressFill.style.width = `${p}%`;
+
+  const escapeHTML = s =>
+    s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+  function blobToImg(blob, el){
+    const img = document.createElement("img");
+    img.src = URL.createObjectURL(blob);
+    el.innerHTML = "";
+    el.classList.remove("small-note");
+    el.appendChild(img);
   }
 
-  function applyFilters(){
-    let arr = [...GLOBAL];
-    const q = normalize(searchInput.value).toLowerCase();
-    const activeChip = document.querySelector(".chip.active")?.dataset.filter;
+  /* ================== URL DETECT ================== */
+  const isYT = url => url.includes("youtube.com/watch");
+  const isReddit = url => url.includes("reddit.com/r/");
+  const isTwitter = url =>
+    url.includes("twitter.com") || url.includes("x.com");
 
-    if(activeChip && activeChip !== "all")
-      arr = arr.filter(x=>x.sentiment===activeChip);
+  /* ================== FETCH YOUTUBE ================== */
+  async function fetchYouTube(videoId){
+    let out = [], page = "";
+    while(out.length < MAX_COMMENTS){
+      const url =
+        `https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${videoId}&maxResults=100&key=${YOUTUBE_API_KEY}` +
+        (page ? `&pageToken=${page}` : "");
+      const r = await fetch(url);
+      const d = await r.json();
+      if(!d.items) break;
 
-    if(q) arr = arr.filter(x=>x.comment.toLowerCase().includes(q));
-
-    if(sortSelect.value==="likes") arr.sort((a,b)=>b.likes-a.likes);
-    if(sortSelect.value==="replies") arr.sort((a,b)=>b.replies-a.replies);
-
-    renderComments(arr);
+      d.items.forEach(i=>{
+        const s=i.snippet.topLevelComment.snippet;
+        out.push({
+          text:s.textOriginal,
+          author:s.authorChannelId?.value || "yt",
+          likes:s.likeCount||0,
+          replies:i.snippet.totalReplyCount||0
+        });
+      });
+      page=d.nextPageToken;
+      if(!page) break;
+    }
+    return out;
   }
 
-  chips.forEach(c=>c.addEventListener("click",()=>{
-    chips.forEach(x=>x.classList.remove("active"));
-    c.classList.add("active");
-    applyFilters();
-  }));
-  searchInput.addEventListener("input",applyFilters);
-  sortSelect.addEventListener("change",applyFilters);
+  /* ================== FETCH REDDIT ================== */
+  async function fetchReddit(url){
+    const r = await fetch(url.replace(/\/$/,"") + ".json");
+    const d = await r.json();
+    const res=[];
+    const walk = arr => arr.forEach(x=>{
+      if(x.data?.body){
+        res.push({
+          text:x.data.body,
+          author:x.data.author,
+          likes:x.data.score||0,
+          replies:x.data.replies?.data?.children?.length||0
+        });
+      }
+      if(x.data?.replies?.data?.children)
+        walk(x.data.replies.data.children);
+    });
+    walk(d[1].data.children);
+    return res.slice(0,MAX_COMMENTS);
+  }
 
-  /* ---------------- Backend calls ---------------- */
-  async function fetchChart(counts){
-    const r = await fetch(`${BACKEND}/generate_chart`,{
+  /* ================== FETCH TWITTER ================== */
+  async function fetchTwitter(url){
+    const id = url.split("/").pop();
+    const r = await fetch(
+      `https://${RAPIDAPI_HOST}/tweet/thread.php?id=${id}`,
+      { headers:{
+        "x-rapidapi-key":RAPIDAPI_KEY,
+        "x-rapidapi-host":RAPIDAPI_HOST
+      }}
+    );
+    const d = await r.json();
+    return d.timeline.map(t=>({
+      text:t.text,
+      author:t.screen_name,
+      likes:t.favorites||0,
+      replies:t.replies||0
+    })).slice(0,MAX_COMMENTS);
+  }
+
+  /* ================== BACKEND ================== */
+  async function predict(texts){
+    const r = await fetch(`${BACKEND_API_URL}/predict`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({comments:texts})
+    });
+    return await r.json();
+  }
+
+  async function pie(counts){
+    const r = await fetch(`${BACKEND_API_URL}/generate_chart`,{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({sentiment_counts:counts})
     });
-    if(!r.ok) throw new Error("Chart failed");
-    return r.blob();
+    return await r.blob();
   }
 
-  async function fetchWordcloud(texts){
-    const r = await fetch(`${BACKEND}/generate_wordcloud`,{
+  async function wordcloud(texts){
+    const r = await fetch(`${BACKEND_API_URL}/generate_wordcloud`,{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({comments:texts})
     });
-    if(!r.ok) throw new Error("Wordcloud failed");
-    return r.blob();
+    return await r.blob();
   }
 
-  async function predict(texts){
-    const r = await fetch(`${BACKEND}/predict`,{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({comments:texts})
-    });
-    if(!r.ok) throw new Error("Prediction failed");
-    return r.json();
+  /* ================== COMMENTS UI ================== */
+  function renderComments(arr){
+    commentsList.innerHTML = arr.slice(0,50).map((x,i)=>`
+      <div class="comment-card">
+        <b>${i+1}.</b> ${escapeHTML(x.comment)}
+        <div class="badge ${x.sentiment}">${x.sentiment}</div>
+        <div class="small-note">👍 ${x.likes} | 💬 ${x.replies}</div>
+      </div>
+    `).join("");
+    commentsCount.textContent = `Showing ${Math.min(50,arr.length)} of ${arr.length}`;
   }
 
-  /* ---------------- Main analyze ---------------- */
-  analyzeBtn.addEventListener("click", async ()=>{
+  function applyFilters(){
+    let a=[...GLOBAL];
+    const q=searchInput.value.toLowerCase();
+    const f=document.querySelector(".chip.active").dataset.filter;
+
+    if(f!=="all") a=a.filter(x=>x.sentiment===f);
+    if(q) a=a.filter(x=>x.comment.toLowerCase().includes(q));
+
+    if(sortSelect.value==="likes") a.sort((x,y)=>y.likes-x.likes);
+    if(sortSelect.value==="replies") a.sort((x,y)=>y.replies-x.replies);
+
+    renderComments(a);
+  }
+
+  chips.forEach(c=>c.onclick=()=>{
+    chips.forEach(x=>x.classList.remove("active"));
+    c.classList.add("active");
+    applyFilters();
+  });
+  searchInput.oninput=applyFilters;
+  sortSelect.onchange=applyFilters;
+
+  /* ================== MAIN ================== */
+  analyzeBtn.onclick = async ()=>{
     try{
-      setError(""); setStatus("Fetching comments..."); setProgress(10);
+      setError(""); setStatus("Detecting page...");
+      setProgress(10);
 
-      const tabs = await chrome.tabs.query({active:true,currentWindow:true});
-      const url = tabs[0].url;
+      const [tab]=await chrome.tabs.query({active:true,currentWindow:true});
+      const url=tab.url;
+      let raw=[];
 
-      if(!url.includes("youtube.com/watch")) throw new Error("Only YouTube supported");
-
-      const vid = new URL(url).searchParams.get("v");
-      let comments=[];
-      let token="";
-
-      while(comments.length<500){
-        const res = await fetch(`https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${vid}&maxResults=100&pageToken=${token}&key=${YOUTUBE_API_KEY}`);
-        const data = await res.json();
-        data.items.forEach(i=>{
-          const s=i.snippet.topLevelComment.snippet;
-          comments.push({text:s.textOriginal, likes:s.likeCount, replies:i.snippet.totalReplyCount});
-        });
-        token=data.nextPageToken;
-        if(!token) break;
+      if(isYT(url)){
+        setStatus("Fetching YouTube comments...");
+        raw=await fetchYouTube(new URL(url).searchParams.get("v"));
+      }else if(isReddit(url)){
+        setStatus("Fetching Reddit comments...");
+        raw=await fetchReddit(url);
+      }else if(isTwitter(url)){
+        setStatus("Fetching Twitter tweets...");
+        raw=await fetchTwitter(url);
+      }else{
+        throw new Error("Unsupported site");
       }
 
-      setStatus("Predicting sentiment..."); setProgress(40);
+      setProgress(40);
+      const texts=raw.map(x=>x.text);
+      const preds=await predict(texts);
 
-      const preds = await predict(comments.map(c=>c.text));
+      GLOBAL = preds.map((p,i)=>({
+        ...p,
+        likes:raw[i].likes,
+        replies:raw[i].replies
+      }));
 
-      GLOBAL = preds.map((p,i)=>({...p,likes:comments[i].likes,replies:comments[i].replies}));
+      setProgress(70);
 
       const counts={positive:0,neutral:0,negative:0};
       GLOBAL.forEach(x=>counts[x.sentiment]++);
 
       mTotal.textContent=GLOBAL.length;
-      mUnique.textContent=new Set(GLOBAL.map(x=>x.comment)).size;
-      mAvgLen.textContent=(GLOBAL.reduce((a,b)=>a+b.comment.split(" ").length,0)/GLOBAL.length).toFixed(1)+" words";
-      mDominant.textContent=Object.keys(counts).reduce((a,b)=>counts[a]>counts[b]?a:b);
+      mUnique.textContent=new Set(raw.map(x=>x.author)).size;
+      mAvgLen.textContent=(texts.join(" ").split(/\s+/).length/GLOBAL.length).toFixed(2)+" words";
+      mDominant.textContent=Object.entries(counts).sort((a,b)=>b[1]-a[1])[0][0];
 
-      insightsList.innerHTML=`<li>Positive ${counts.positive}</li><li>Neutral ${counts.neutral}</li><li>Negative ${counts.negative}</li>`;
+      insightsList.innerHTML=`
+        <li>Positive: ${counts.positive}</li>
+        <li>Neutral: ${counts.neutral}</li>
+        <li>Negative: ${counts.negative}</li>
+      `;
 
-      setStatus("Generating visuals..."); setProgress(70);
-
-      blobToImg(await fetchChart(counts),chartContainer);
-
-      const allBlob = await fetchWordcloud(GLOBAL.map(x=>x.comment));
-      blobToImg(allBlob,wordcloudAll);
-
-      blobToImg(await fetchWordcloud(GLOBAL.filter(x=>x.sentiment==="positive").map(x=>x.comment)),wordcloudPos);
-      blobToImg(await fetchWordcloud(GLOBAL.filter(x=>x.sentiment==="negative").map(x=>x.comment)),wordcloudNeg);
+      blobToImg(await pie(counts), chartContainer);
+      blobToImg(await wordcloud(texts), wcAll);
+      blobToImg(await wordcloud(GLOBAL.filter(x=>x.sentiment==="positive").map(x=>x.comment)), wcPositive);
+      blobToImg(await wordcloud(GLOBAL.filter(x=>x.sentiment==="negative").map(x=>x.comment)), wcNegative);
 
       applyFilters();
+      setStatus("Done!");
+      setProgress(100);
 
-      setStatus("Done!"); setProgress(100);
     }catch(e){
       console.error(e);
       setError(e.message);
+      setProgress(0);
     }
-  });
+  };
+
 });
