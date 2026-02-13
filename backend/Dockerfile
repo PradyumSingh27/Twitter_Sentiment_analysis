@@ -21,7 +21,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # -----------------------------
 # NLTK data (REQUIRED)
 # -----------------------------
-RUN python -m nltk.downloader stopwords wordnet omw-1.4 punkt
+RUN python -m nltk.downloader \
+    stopwords \
+    wordnet \
+    omw-1.4 \
+    punkt \
+    averaged_perceptron_tagger \
+    averaged_perceptron_tagger_eng
 
 # -----------------------------
 # Copy application code
