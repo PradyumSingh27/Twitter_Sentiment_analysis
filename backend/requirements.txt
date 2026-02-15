@@ -5,7 +5,7 @@ numpy==2.3.5
 scikit-learn==1.8.0
 lightgbm==4.6.0
 joblib==1.5.2
-mlflow==2.7.0
+
 matplotlib==3.10.7
 wordcloud==1.9.5
 nltk==3.9.2

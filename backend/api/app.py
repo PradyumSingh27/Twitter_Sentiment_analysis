@@ -23,7 +23,6 @@ import nltk
 from nltk.corpus import stopwords, wordnet
 from nltk.stem import WordNetLemmatizer
 import emoji
-import mlflow
 import requests
 
 
@@ -34,23 +33,17 @@ app = FastAPI(title="Sentiment Analyzer API (YouTube + Reddit)")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # ✅ for local development only
+    allow_origins=["*"],  # change later for production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # =========================================================
-# ✅ MLflow Toggle
-# =========================================================
-ENABLE_MLFLOW = os.getenv("ENABLE_MLFLOW", "false").lower() == "true"
-
-# =========================================================
 # ✅ Paths
 # =========================================================
-BASE_DIR = Path(__file__).resolve().parent.parent  # backend/
+BASE_DIR = Path(__file__).resolve().parent.parent
 MODEL_PATH = BASE_DIR / "models" / "final_data_pipeline.joblib"
-
 
 # =========================================================
 # ✅ Globals
@@ -74,24 +67,13 @@ CHAT_WORDS = {
     "FYI": "For Your Information",
 }
 
-
-def chat_conversion(text: str) -> str:
-    out = []
-    for w in str(text).split():
-        out.append(CHAT_WORDS.get(w.upper(), w))
-    return " ".join(out)
-
-
-def get_wordnet_pos(word: str):
-    tag = nltk.pos_tag([word])[0][1][0].upper()
-    tag_dict = {"J": wordnet.ADJ, "N": wordnet.NOUN, "V": wordnet.VERB, "R": wordnet.ADV}
-    return tag_dict.get(tag, wordnet.NOUN)
-
-
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 MAX_COMMENTS = 500
 
 
+# =========================================================
+# ✅ YouTube Comments Route
+# =========================================================
 @app.get("/youtube-comments")
 def youtube_comments(video_id: str):
     if not YOUTUBE_API_KEY:
@@ -136,33 +118,28 @@ def youtube_comments(video_id: str):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+# =========================================================
+# ✅ Preprocessing
+# =========================================================
+def chat_conversion(text: str) -> str:
+    return " ".join(CHAT_WORDS.get(w.upper(), w) for w in str(text).split())
+
+
+def get_wordnet_pos(word: str):
+    tag = nltk.pos_tag([word])[0][1][0].upper()
+    tag_dict = {"J": wordnet.ADJ, "N": wordnet.NOUN, "V": wordnet.VERB, "R": wordnet.ADV}
+    return tag_dict.get(tag, wordnet.NOUN)
+
 
 @lru_cache(maxsize=50000)
 def preprocess_comment(text: str) -> str:
-    """
-    ✅ Production optimized preprocessing
-    """
     text = str(text).lower().strip()
-
-    # normalize repeated chars
     text = " ".join([re.sub(r"(.)\1{2,}", r"\1\1", w) for w in text.split()])
-
-    # chat conversion
     text = chat_conversion(text)
-
-    # remove urls
     text = re.sub(r"http\S+|www\S+", "", text)
-
-    # remove mentions
     text = re.sub(r"@\w+", "", text)
-
-    # remove hashtag symbol only
     text = text.replace("#", "")
-
-    # emojis remove
     text = emoji.replace_emoji(text, replace="")
-
-    # keep only letters+spaces
     text = re.sub(r"[^a-z\s]", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
 
@@ -184,23 +161,14 @@ def load_model():
     global model
 
     if not MODEL_PATH.exists():
-        raise FileNotFoundError(f"❌ Model file not found: {MODEL_PATH}")
+        raise FileNotFoundError(f"Model file not found: {MODEL_PATH}")
 
     model = joblib.load(MODEL_PATH)
-    print("✅ Model loaded:", MODEL_PATH)
-
-    if ENABLE_MLFLOW:
-        ROOT_DIR = BASE_DIR.parent
-        mlflow_db_path = ROOT_DIR / "mlflow.db"
-        mlflow.set_tracking_uri(f"sqlite:///{mlflow_db_path}")
-        mlflow.set_experiment("FastAPI_Predictions")
-        print("✅ MLflow ENABLED")
-    else:
-        print("⚠️ MLflow DISABLED")
+    print("Model loaded:", MODEL_PATH)
 
 
 # =========================================================
-# ✅ Request Schemas
+# ✅ Schemas
 # =========================================================
 class PredictRequest(BaseModel):
     comments: List[str]
@@ -214,13 +182,8 @@ class WordCloudRequest(BaseModel):
     comments: List[str]
 
 
-class LengthChartRequest(BaseModel):
-    sentiments: List[str]
-    lengths: List[int]
-
-
 # =========================================================
-# ✅ Routes
+# ✅ Basic Routes
 # =========================================================
 @app.get("/")
 def home():
@@ -233,7 +196,7 @@ def health():
 
 
 # =========================================================
-# ✅ Prediction Endpoint
+# ✅ Prediction
 # =========================================================
 @app.post("/predict")
 def predict(req: PredictRequest):
@@ -243,10 +206,6 @@ def predict(req: PredictRequest):
     try:
         cleaned = [preprocess_comment(c) for c in req.comments]
         preds = model.predict(cleaned).tolist()
-
-        if ENABLE_MLFLOW:
-            with mlflow.start_run(run_name="predict"):
-                mlflow.log_param("num_comments", len(req.comments))
 
         return [
             {"comment": c, "cleaned": cl, "sentiment": p}
@@ -264,7 +223,6 @@ def predict(req: PredictRequest):
 def generate_chart(req: ChartRequest):
     try:
         counts = req.sentiment_counts
-
         labels = ["positive", "neutral", "negative"]
         sizes = [
             int(counts.get("positive", 0)),
@@ -285,16 +243,6 @@ def generate_chart(req: ChartRequest):
             pctdistance=0.7,
             textprops={"color": "white", "fontsize": 12, "fontweight": "bold"},
         )
-
-        legend = ax.legend(
-            wedges,
-            [x.title() for x in labels],
-            loc="center left",
-            bbox_to_anchor=(1.0, 0.5),
-            frameon=False
-        )
-        for t in legend.get_texts():
-            t.set_color("white")
 
         ax.axis("equal")
 
@@ -338,4 +286,3 @@ def generate_wordcloud(req: WordCloudRequest):
 
     except Exception as e:
         return JSONResponse({"error": f"Wordcloud generation failed: {e}"}, status_code=500)
-
