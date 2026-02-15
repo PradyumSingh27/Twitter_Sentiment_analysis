@@ -3,7 +3,7 @@ uvicorn==0.38.0
 
 pandas==2.3.3
 numpy==2.3.5
-mlflow==3.7.0
+
 
 scikit-learn==1.8.0
 lightgbm==4.6.0
@@ -18,3 +18,4 @@ emoji==2.15.0
 pydantic==2.12.5
 PyYAML==6.0.3
 python-multipart==0.0.9
+requests==2.31.0

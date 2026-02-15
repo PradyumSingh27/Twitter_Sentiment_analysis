@@ -24,11 +24,7 @@ from nltk.corpus import stopwords, wordnet
 from nltk.stem import WordNetLemmatizer
 import emoji
 import mlflow
-nltk.download("punkt")
-nltk.download("stopwords")
-nltk.download("wordnet")
-nltk.download("omw-1.4")
-nltk.download("averaged_perceptron_tagger")
+import requests
 
 
 # =========================================================
@@ -90,6 +86,55 @@ def get_wordnet_pos(word: str):
     tag = nltk.pos_tag([word])[0][1][0].upper()
     tag_dict = {"J": wordnet.ADJ, "N": wordnet.NOUN, "V": wordnet.VERB, "R": wordnet.ADV}
     return tag_dict.get(tag, wordnet.NOUN)
+
+
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
+MAX_COMMENTS = 500
+
+
+@app.get("/youtube-comments")
+def youtube_comments(video_id: str):
+    if not YOUTUBE_API_KEY:
+        return JSONResponse({"error": "YouTube API key missing"}, status_code=500)
+
+    comments = []
+    page = ""
+
+    try:
+        while len(comments) < MAX_COMMENTS:
+            url = (
+                "https://www.googleapis.com/youtube/v3/commentThreads"
+                f"?part=snippet&videoId={video_id}"
+                f"&maxResults=100&key={YOUTUBE_API_KEY}"
+            )
+
+            if page:
+                url += f"&pageToken={page}"
+
+            r = requests.get(url)
+            data = r.json()
+
+            if "items" not in data:
+                break
+
+            for item in data["items"]:
+                snippet = item["snippet"]["topLevelComment"]["snippet"]
+                comments.append({
+                    "text": snippet.get("textOriginal", ""),
+                    "author": snippet.get("authorChannelId", {}).get("value", "yt"),
+                    "likes": snippet.get("likeCount", 0),
+                    "replies": item["snippet"].get("totalReplyCount", 0)
+                })
+
+            page = data.get("nextPageToken")
+            if not page:
+                break
+
+        return comments[:MAX_COMMENTS]
+
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
 
 
 @lru_cache(maxsize=50000)
