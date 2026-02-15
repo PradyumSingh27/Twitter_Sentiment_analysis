@@ -1,9 +1,9 @@
 document.addEventListener("DOMContentLoaded", () => {
 
   /* ================= CONFIG ================= */
-  const YOUTUBE_API_KEY = "AIzaSyAAwUhK2KrdYXj12hfCnErPOZsiGSXtLSo";
+  
   const BACKEND_API_URL = "https://twitter-sentiment-api-pfim.onrender.com";
-  const MAX_COMMENTS = 500;
+  const MAX_COMMENTS = 1500;
 
   /* ================= ELEMENTS ================= */
   const analyzeBtn = document.getElementById("analyzeBtn");
@@ -70,32 +70,30 @@ document.addEventListener("DOMContentLoaded", () => {
   const isReddit = url => url.includes("reddit.com/r/");
 
   /* ================= FETCH YOUTUBE ================= */
-  async function fetchYouTube(videoId){
-    let out = [], page = "";
-    while(out.length < MAX_COMMENTS){
-      const url =
-        `https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${videoId}&maxResults=100&key=${YOUTUBE_API_KEY}` +
-        (page ? `&pageToken=${page}` : "");
+async function fetchYouTube(videoId){
+  try {
+    const r = await fetch(
+      `${BACKEND_API_URL}/youtube-comments?video_id=${videoId}`
+    );
 
-      const r = await fetch(url);
-      const d = await r.json();
-      if(!d.items) break;
-
-      d.items.forEach(i=>{
-        const s=i.snippet.topLevelComment.snippet;
-        out.push({
-          text:s.textOriginal || "",
-          author:s.authorChannelId?.value || "yt",
-          likes:s.likeCount||0,
-          replies:i.snippet.totalReplyCount||0
-        });
-      });
-
-      page=d.nextPageToken;
-      if(!page) break;
+    if (!r.ok) {
+      throw new Error("Failed to fetch YouTube comments from backend");
     }
-    return out.slice(0, MAX_COMMENTS);
+
+    const data = await r.json();
+
+    if (!Array.isArray(data)) {
+      throw new Error(data.error || "Invalid response from backend");
+    }
+
+    return data.slice(0, MAX_COMMENTS);
+
+  } catch (err) {
+    console.error("YouTube fetch error:", err);
+    throw err;
   }
+}
+
 
   /* ================= FETCH REDDIT ================= */
   async function fetchReddit(url){

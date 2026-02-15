@@ -1,17 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "Sentiment Analyzer",
+  "name": "Comments Sentiment Analyzer",
   "version": "1.0",
-  "description": "YouTube, Reddit and Twitter Sentiment Analyzer",
+  "description": "YouTube, Reddit comment Sentiment Analyzer",
   "action": {
     "default_popup": "popup.html"
   },
   "permissions": ["tabs"],
   "host_permissions": [
-    "https://www.googleapis.com/*",
-    "https://www.reddit.com/*",
-    "https://twitter154.p.rapidapi.com/*",
-    "https://twitter.com/*",
-    "https://x.com/*"
+    "https://twitter-sentiment-api-pfim.onrender.com/*",
+    "https://www.reddit.com/*"
+  
   ]
 }

@@ -68,7 +68,7 @@ CHAT_WORDS = {
 }
 
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
-MAX_COMMENTS = 500
+MAX_COMMENTS = 1500
 
 
 # =========================================================
