@@ -32,3 +32,5 @@ __pycache__/
 # Jupyter
 *.ipynb
 .ipynb_checkpoints/
+
+chrome-extension/*.zip
