@@ -27,7 +27,7 @@ import requests
 
 
 # =========================================================
-# ✅ App Init
+#  App Init
 # =========================================================
 app = FastAPI(title="Sentiment Analyzer API (YouTube + Reddit)")
 
@@ -40,13 +40,13 @@ app.add_middleware(
 )
 
 # =========================================================
-# ✅ Paths
+#  Paths
 # =========================================================
 BASE_DIR = Path(__file__).resolve().parent.parent
 MODEL_PATH = BASE_DIR / "models" / "final_data_pipeline.joblib"
 
 # =========================================================
-# ✅ Globals
+#  Globals
 # =========================================================
 try:
     STOP_WORDS = set(stopwords.words("english")) - {"not", "but", "however", "no", "yet"}
@@ -72,7 +72,7 @@ MAX_COMMENTS = 1500
 
 
 # =========================================================
-# ✅ YouTube Comments Route
+#  YouTube Comments Route
 # =========================================================
 @app.get("/youtube-comments")
 def youtube_comments(video_id: str):
@@ -119,7 +119,7 @@ def youtube_comments(video_id: str):
 
 
 # =========================================================
-# ✅ Preprocessing
+#  Preprocessing
 # =========================================================
 def chat_conversion(text: str) -> str:
     return " ".join(CHAT_WORDS.get(w.upper(), w) for w in str(text).split())
@@ -154,7 +154,7 @@ def preprocess_comment(text: str) -> str:
 
 
 # =========================================================
-# ✅ Load Model
+#  Load Model
 # =========================================================
 @app.on_event("startup")
 def load_model():
@@ -168,7 +168,7 @@ def load_model():
 
 
 # =========================================================
-# ✅ Schemas
+#  Schemas
 # =========================================================
 class PredictRequest(BaseModel):
     comments: List[str]
@@ -183,7 +183,7 @@ class WordCloudRequest(BaseModel):
 
 
 # =========================================================
-# ✅ Basic Routes
+#  Basic Routes
 # =========================================================
 @app.get("/")
 def home():
@@ -196,7 +196,7 @@ def health():
 
 
 # =========================================================
-# ✅ Prediction
+#  Prediction
 # =========================================================
 @app.post("/predict")
 def predict(req: PredictRequest):
@@ -217,7 +217,7 @@ def predict(req: PredictRequest):
 
 
 # =========================================================
-# ✅ Pie Chart
+#  Pie Chart
 # =========================================================
 @app.post("/generate_chart")
 def generate_chart(req: ChartRequest):
@@ -236,8 +236,13 @@ def generate_chart(req: ChartRequest):
         fig, ax = plt.subplots(figsize=(7, 6), facecolor="#111827")
         ax.set_facecolor("#111827")
 
+        # Sentiment Colors
+        colors = ["#22c55e", "#facc15", "#ef4444"]  
+        # Green, Yellow, Red
+
         wedges, _, _ = ax.pie(
             sizes,
+            colors=colors,  #  Added colors
             autopct="%1.1f%%",
             startangle=140,
             pctdistance=0.7,
@@ -245,6 +250,17 @@ def generate_chart(req: ChartRequest):
         )
 
         ax.axis("equal")
+
+        # Added Legend
+        ax.legend(
+            wedges,
+            [label.title() for label in labels],
+            title="Sentiment",
+            loc="center left",
+            bbox_to_anchor=(1, 0.5),
+            frameon=False,
+            labelcolor="white"
+        )
 
         img_io = io.BytesIO()
         plt.tight_layout()
@@ -259,7 +275,7 @@ def generate_chart(req: ChartRequest):
 
 
 # =========================================================
-# ✅ Wordcloud
+#  Wordcloud
 # =========================================================
 @app.post("/generate_wordcloud")
 def generate_wordcloud(req: WordCloudRequest):
