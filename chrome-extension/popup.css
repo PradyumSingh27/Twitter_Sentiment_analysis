@@ -177,8 +177,8 @@ body.theme-comments { --accent:#22c55e; }
   font-size:12px;
 }
 
-.badge.positive{background:#2cda72;color:#bbf7d0;}
-.badge.neutral{background:#facc15;color:#e5e7eb;}
+.badge.positive{background:#2cda72;color:#151a17;}
+.badge.neutral{background:#facc15;color:#090a0c;}
 .badge.negative{background:#eb2222;color:#0a0909;}
 
 /* ================= COMMENTS TAB SPACING FIX ================= */
